@@ -132,6 +132,8 @@
     <div class="row"><span class="label">Info box</span>
       <div class="seg" data-key="infoBoxWhite">
         <button data-v="0" data-c="red">Red</button><button data-v="1" data-c="white">White</button></div></div>
+    <div class="row"><span class="label">Adapter messages on gauge<br><span class="hint">The small text line at the top, like "Looking for WIFI_OBDII"</span></span>
+      <label class="switch"><input type="checkbox" id="screenDebugOn"><span></span></label></div>
   </div>
 
   <h2>Shift light</h2>
@@ -370,6 +372,7 @@ function render() {
   });
   $('shiftOn').checked = S.shiftOn;
   $('serialOn').checked = S.serialOn;
+  $('screenDebugOn').checked = S.screenDebugOn;
   $('shiftBody').classList.toggle('dim', !S.shiftOn);
   const y = $('yellowRpm'), r = $('redRpm');
   y.min = S.rpmMin; y.max = S.rpmMax - S.rpmGap; y.value = S.yellowRpm;
@@ -396,6 +399,7 @@ document.querySelectorAll('.seg').forEach(seg => {
 
 $('shiftOn').addEventListener('change', e => save('/api/settings', { shiftOn: e.target.checked ? '1' : '0' }));
 $('serialOn').addEventListener('change', e => save('/api/settings', { serialOn: e.target.checked ? '1' : '0' }));
+$('screenDebugOn').addEventListener('change', e => save('/api/settings', { screenDebugOn: e.target.checked ? '1' : '0' }));
 
 // RPM sliders: yellow always stays at least rpmGap below red
 $('yellowRpm').addEventListener('input', e => {
