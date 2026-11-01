@@ -189,6 +189,8 @@
       <div class="inline" style="margin-top:12px"><button class="btn wide" id="sourceSave">Save data source</button></div>
       <span class="hint" style="margin-top:8px">Switching between Wi-Fi and CAN restarts the gauge.</span>
     </div>
+    <div class="row"><span class="label">CAN max speed<br><span class="hint">Wired CAN only. Asks the car again the moment it answers, and keeps IAT updating at high RPM</span></span>
+      <label class="switch"><input type="checkbox" id="canMaxSpeed"><span></span></label></div>
     <div class="row"><span class="label">Serial port messages<br><span class="hint">Debug text sent over USB</span></span>
       <label class="switch"><input type="checkbox" id="serialOn"><span></span></label></div>
     <div class="row"><button class="btn wide" id="defaults">Reset all settings to defaults</button></div>
@@ -373,6 +375,7 @@ function render() {
   $('shiftOn').checked = S.shiftOn;
   $('serialOn').checked = S.serialOn;
   $('screenDebugOn').checked = S.screenDebugOn;
+  $('canMaxSpeed').checked = S.canMaxSpeed;
   $('shiftBody').classList.toggle('dim', !S.shiftOn);
   const y = $('yellowRpm'), r = $('redRpm');
   y.min = S.rpmMin; y.max = S.rpmMax - S.rpmGap; y.value = S.yellowRpm;
@@ -400,6 +403,7 @@ document.querySelectorAll('.seg').forEach(seg => {
 $('shiftOn').addEventListener('change', e => save('/api/settings', { shiftOn: e.target.checked ? '1' : '0' }));
 $('serialOn').addEventListener('change', e => save('/api/settings', { serialOn: e.target.checked ? '1' : '0' }));
 $('screenDebugOn').addEventListener('change', e => save('/api/settings', { screenDebugOn: e.target.checked ? '1' : '0' }));
+$('canMaxSpeed').addEventListener('change', e => save('/api/settings', { canMaxSpeed: e.target.checked ? '1' : '0' }));
 
 // RPM sliders: yellow always stays at least rpmGap below red
 $('yellowRpm').addEventListener('input', e => {
