@@ -1,0 +1,492 @@
+<!doctype html>
+<!--
+  WRX gauge settings page - ONE page, two ways in:
+   * USB:       open this file in Chrome or Edge on a computer with the gauge
+                plugged in by USB, then click Connect.
+   * Bluetooth: open it from a web address (https) in the Bluefy app on
+                iPhone, then tap Connect and pick WRX-Gauge.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0b0c">
+<title>WRX Gauge</title>
+<style>
+  :root {
+    --bg: #0b0b0c; --card: #18181b; --line: #2a2a2e; --text: #f2f2f3; --muted: #9a9aa2;
+    --red: #ff3030; --yellow: #f5c400; --green: #33c46a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+  }
+  main { max-width: 520px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 4px 4px 2px; letter-spacing: .5px; }
+  h1 span { color: var(--red); }
+  .sub { color: var(--muted); margin: 0 4px 18px; font-size: 14px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted);
+       margin: 26px 16px 8px; font-weight: 600; }
+  .card { background: var(--card); border-radius: 14px; overflow: hidden; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+         padding: 13px 16px; min-height: 52px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row.col { flex-direction: column; align-items: stretch; }
+  .row .label { flex: 1; }
+  .hint { color: var(--muted); font-size: 13px; }
+  .dim { opacity: .4; pointer-events: none; }
+
+  .seg { display: inline-flex; background: #26262a; border-radius: 9px; padding: 2px; }
+  .seg button { border: 0; background: none; color: var(--text); font: inherit; font-size: 14px;
+                padding: 6px 14px; border-radius: 7px; min-width: 64px; cursor: pointer; }
+  .seg button.on { background: #3a3a40; font-weight: 600; }
+  .seg button.on[data-c="red"] { background: var(--red); color: #fff; }
+  .seg button.on[data-c="white"] { background: #fff; color: #000; }
+
+  .switch { position: relative; width: 51px; height: 31px; flex: none; cursor: pointer; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; background: #3a3a40; border-radius: 31px; transition: .2s; }
+  .switch span::before { content: ""; position: absolute; width: 27px; height: 27px; left: 2px; top: 2px;
+                         background: #fff; border-radius: 50%; transition: .2s; }
+  .switch input:checked + span { background: var(--green); }
+  .switch input:checked + span::before { transform: translateX(20px); }
+
+  .slider-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .rpm { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .rpm.y { color: var(--yellow); } .rpm.r { color: var(--red); }
+  input[type=range] { width: 100%; margin: 12px 0 4px; accent-color: var(--red); height: 28px; }
+  input[type=range].y { accent-color: var(--yellow); }
+
+  input[type=text], input[type=password], input[type=number], select {
+    width: 100%; font: inherit; color: var(--text); background: #26262a; border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; -webkit-appearance: none; appearance: none;
+  }
+  .inline { display: flex; gap: 8px; margin-top: 8px; }
+  .inline input { flex: 1; }
+  button.btn { font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 10px 16px;
+               background: #3a3a40; color: var(--text); white-space: nowrap; cursor: pointer; }
+  button.btn.red { background: var(--red); color: #fff; }
+  button.btn.wide { width: 100%; padding: 13px; }
+  .field-label { font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+
+  .live { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); }
+  .live div { background: var(--card); padding: 12px 8px; text-align: center; }
+  .live b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .live small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 13px; font-weight: 600;
+          background: #3a3a40; }
+  .pill.ok { background: rgba(51,196,106,.18); color: var(--green); }
+  .pill.bad { background: rgba(255,48,48,.18); color: var(--red); }
+
+  #linkBar { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            background: var(--card); border-radius: 14px; padding: 12px 16px; margin-bottom: 12px; }
+
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center;
+           justify-content: center; padding: 24px; z-index: 10; }
+  .modal .box { background: #222226; border-radius: 16px; padding: 20px; max-width: 340px; width: 100%; }
+  .modal p { margin: 0 0 18px; }
+  .modal .inline { margin: 0; }
+  .modal .inline button { flex: 1; }
+  #toast { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+           background: #2c2c31; padding: 10px 18px; border-radius: 99px; font-size: 14px; z-index: 20;
+           transition: opacity .3s; opacity: 0; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #toast.bad { background: var(--red); color: #fff; }
+  #offline { background: rgba(255,48,48,.15); color: var(--red); border-radius: 12px; padding: 10px 14px;
+             margin-bottom: 12px; font-size: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>WRX <span>Gauge</span></h1>
+  <p class="sub">Changes save and apply right away. Adjust while parked.</p>
+
+  <div id="linkBar" hidden>
+    <span><b id="linkName">USB</b> <span class="hint" id="linkState">Not connected</span></span>
+    <button class="btn red" id="linkConnect">Connect</button>
+  </div>
+  <div id="offline" hidden></div>
+
+  <h2>Live</h2>
+  <div class="card">
+    <div class="row"><span class="label">OBD link</span><span id="link" class="pill">...</span></div>
+    <div class="live">
+      <div><b id="vBoost">--</b><small>Boost psi</small></div>
+      <div><b id="vRpm">--</b><small>RPM</small></div>
+      <div><b id="vAfr">--</b><small>Air/fuel</small></div>
+      <div><b id="vCoolant">--</b><small>Coolant &deg;F</small></div>
+      <div><b id="vIat">--</b><small>IAT &deg;F</small></div>
+      <div><b id="vOil">--</b><small>Oil miles</small></div>
+    </div>
+  </div>
+
+  <h2>Display</h2>
+  <div class="card">
+    <div class="row"><span class="label">Arc numbers</span>
+      <div class="seg" data-key="arcNumbersWhite">
+        <button data-v="0" data-c="red">Red</button><button data-v="1" data-c="white">White</button></div></div>
+    <div class="row"><span class="label">Info box</span>
+      <div class="seg" data-key="infoBoxWhite">
+        <button data-v="0" data-c="red">Red</button><button data-v="1" data-c="white">White</button></div></div>
+  </div>
+
+  <h2>Shift light</h2>
+  <div class="card">
+    <div class="row"><span class="label">Shift light<br><span class="hint">Off also hides it on the gauge</span></span>
+      <label class="switch"><input type="checkbox" id="shiftOn"><span></span></label></div>
+    <div id="shiftBody">
+      <div class="row col">
+        <div class="slider-head"><span>Yellow at</span><span class="rpm y" id="yellowOut">--</span></div>
+        <input type="range" class="y" id="yellowRpm" step="100">
+      </div>
+      <div class="row"><span class="label">Yellow style</span>
+        <div class="seg" data-key="yellowFlash"><button data-v="0">Solid</button><button data-v="1">Flashing</button></div></div>
+      <div class="row col">
+        <div class="slider-head"><span>Red at</span><span class="rpm r" id="redOut">--</span></div>
+        <input type="range" id="redRpm" step="100">
+        <span class="hint">Redline is 6,700. Yellow always stays below red.</span>
+      </div>
+      <div class="row"><span class="label">Red style</span>
+        <div class="seg" data-key="redFlash"><button data-v="0">Solid</button><button data-v="1">Flashing</button></div></div>
+    </div>
+  </div>
+
+  <h2>Oil miles</h2>
+  <div class="card">
+    <div class="row"><span class="label">Miles on this oil</span><span class="rpm" id="oilNow">--</span></div>
+    <div class="row col">
+      <span>Change interval</span>
+      <span class="hint">The gauge flashes green when the oil miles reach this.</span>
+      <div class="inline"><input type="number" id="oilInterval" inputmode="numeric" min="500" max="20000" step="100">
+        <button class="btn" id="oilIntervalSave">Save</button></div>
+    </div>
+    <div class="row col">
+      <span>Correct the count</span>
+      <span class="hint">If the miles drift, type the true number.</span>
+      <div class="inline"><input type="number" id="oilSet" inputmode="numeric" min="0" max="100000" placeholder="Miles">
+        <button class="btn" id="oilSetBtn">Set</button></div>
+    </div>
+    <div class="row"><button class="btn red wide" id="oilReset">Reset oil miles to 0</button></div>
+  </div>
+
+  <h2>System</h2>
+  <div class="card">
+    <div class="row col">
+      <div class="field-label" style="margin-top:0">Data source</div>
+      <select id="source"><option value="1">OBD Wi-Fi adapter</option><option value="0">Wired CAN</option></select>
+      <div id="elmFields">
+        <div class="field-label">Adapter WiFi name</div>
+        <input type="text" id="elmSsid" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div class="field-label">Adapter password (empty if none)</div>
+        <input type="password" id="elmPass" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="inline" style="margin-top:12px"><button class="btn wide" id="sourceSave">Save data source</button></div>
+      <span class="hint" style="margin-top:8px">Switching between Wi-Fi and CAN restarts the gauge.</span>
+    </div>
+    <div class="row"><span class="label">Serial port messages<br><span class="hint">Debug text sent over USB</span></span>
+      <label class="switch"><input type="checkbox" id="serialOn"><span></span></label></div>
+    <div class="row"><button class="btn wide" id="defaults">Reset all settings to defaults</button></div>
+    <div class="row"><span class="label">Firmware</span><span class="hint" id="fw">--</span></div>
+  </div>
+</main>
+
+<div class="modal" id="modal" hidden>
+  <div class="box"><p id="modalText"></p>
+    <div class="inline"><button class="btn" id="modalNo">Cancel</button><button class="btn red" id="modalYes">Yes</button></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let S = null;
+
+// ---------- talking to the gauge ----------
+//  'usb' - opened as a file on a computer: USB cable (Chrome/Edge)
+//  'ble' - opened from a web address, e.g. in Bluefy on iPhone: Bluetooth
+// Both send one-line requests and wait for a "@@ok"/"@@err" line.
+const MODE = location.protocol === 'file:' ? 'usb' : 'ble';
+let linkWrite = null;                 // sends text to the gauge; null = not connected
+let pending = null, queue = Promise.resolve(), lineBuf = '';
+const decoder = new TextDecoder();
+
+function linkUp(write) {
+  linkWrite = write; lineBuf = '';
+  $('linkState').textContent = 'Connected';
+  $('linkConnect').hidden = true;
+}
+function linkDown() {
+  linkWrite = null;
+  $('linkState').textContent = 'Not connected';
+  $('linkConnect').hidden = false;
+}
+
+// incoming text from USB or Bluetooth: answers are lines starting with "@@"
+function feed(bytes) {
+  lineBuf += decoder.decode(bytes, { stream: true });
+  let i;
+  while ((i = lineBuf.indexOf('\n')) >= 0) {
+    const line = lineBuf.slice(0, i).replace(/\r$/, '');
+    lineBuf = lineBuf.slice(i + 1);
+    if (line.startsWith('@@') && pending) { const p = pending; pending = null; p(line); }
+  }
+  if (lineBuf.length > 8192) lineBuf = '';      // only debug text - drop it
+}
+
+// one request at a time; the answer is the next "@@" line
+function lineRequest(line) {
+  const run = () => new Promise((resolve, reject) => {
+    if (!linkWrite) return reject(new Error('Not connected'));
+    const timer = setTimeout(() => { pending = null; reject(new Error('No answer from the gauge')); }, 4000);
+    pending = l => {
+      clearTimeout(timer);
+      if (l.startsWith('@@ok ')) resolve(l.slice(5));
+      else reject(new Error(l.replace(/^@@err ?/, '') || 'Error'));
+    };
+    linkWrite(new TextEncoder().encode(line + '\n'))
+      .catch(e => { clearTimeout(timer); pending = null; reject(e); });
+  });
+  const p = queue.then(run, run);
+  queue = p.catch(() => {});
+  return p;
+}
+
+// --- USB (Web Serial) ---
+let port = null, reader = null;
+async function usbOpen(p) {
+  await p.open({ baudRate: 115200 });
+  try { await p.setSignals({ dataTerminalReady: true, requestToSend: false }); } catch (e) {}
+  port = p;
+  const writer = port.writable.getWriter();
+  linkUp(bytes => writer.write(bytes));
+  reader = port.readable.getReader();
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      feed(value);
+    }
+  } catch (e) { /* unplugged or the gauge restarted */ }
+  try { reader.releaseLock(); } catch (e) {}
+  try { writer.releaseLock(); } catch (e) {}
+  try { await port.close(); } catch (e) {}
+  linkDown();
+}
+async function usbConnect() {
+  if (!('serial' in navigator)) return toast('Open this file in Chrome or Edge to use USB', true);
+  try { usbOpen(await navigator.serial.requestPort()).catch(e => toast(usbHelp(e), true)); }
+  catch (e) { if (e.name !== 'NotFoundError') toast(usbHelp(e), true); }
+}
+function usbHelp(e) {
+  return /open|busy|access/i.test(e.message)
+    ? 'The USB port is busy - close the Serial Monitor or upload window and try again'
+    : e.message;
+}
+
+// --- Bluetooth (Web Bluetooth - Bluefy on iPhone) ---
+const BLE_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const BLE_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';   // we write requests here
+const BLE_TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';   // answers arrive here
+let bleDevice = null;
+async function bleAttach() {
+  const gatt = await bleDevice.gatt.connect();
+  const svc = await gatt.getPrimaryService(BLE_SERVICE);
+  const rx = await svc.getCharacteristic(BLE_RX);
+  const tx = await svc.getCharacteristic(BLE_TX);
+  tx.addEventListener('characteristicvaluechanged', e => {
+    const v = e.target.value;                     // a DataView - may be a window into a bigger buffer
+    feed(new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
+  });
+  await tx.startNotifications();
+  linkUp(async bytes => {                         // BLE packets are small: 20 bytes at a time
+    for (let i = 0; i < bytes.length; i += 20) {
+      const part = bytes.slice(i, i + 20);
+      if (rx.writeValueWithResponse) await rx.writeValueWithResponse(part);
+      else await rx.writeValue(part);
+    }
+  });
+}
+async function bleConnect() {
+  if (!navigator.bluetooth) return toast('Open this page in the Bluefy app to use Bluetooth', true);
+  try {
+    bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [BLE_SERVICE] }] });
+    bleDevice.addEventListener('gattserverdisconnected', () => { linkDown(); setTimeout(bleRetry, 2000); });
+    await bleAttach();
+  } catch (e) { if (e.name !== 'NotFoundError') toast(e.message, true); }
+}
+async function bleRetry() {                       // out of range or the gauge restarted: keep trying
+  if (linkWrite || !bleDevice) return;
+  try { await bleAttach(); } catch (e) { setTimeout(bleRetry, 3000); }
+}
+
+async function api(path, data) {
+  const what = path.replace('/api/', '');
+  const q = data ? new URLSearchParams(data).toString() : '';
+  const text = await lineRequest('@' + what + (q ? ' ' + q : ''));
+  return text ? JSON.parse(text) : null;
+}
+
+const connected = () => !!linkWrite;
+
+// ---------- page ----------
+let toastTimer;
+function toast(msg, bad) {
+  const t = $('toast');
+  t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = '', 2200);
+}
+
+function ask(text) {
+  return new Promise(resolve => {
+    $('modalText').textContent = text; $('modal').hidden = false;
+    const done = v => { $('modal').hidden = true; resolve(v); };
+    $('modalYes').onclick = () => done(true);
+    $('modalNo').onclick = () => done(false);
+  });
+}
+
+async function save(path, data, okMsg) {
+  if (!connected()) { toast('Connect to the gauge first', true); return false; }
+  try { S = await api(path, data); render(); toast(okMsg || 'Saved'); return true; }
+  catch (e) {
+    toast(e.message, true);
+    try { S = await api('/api/settings'); } catch (e2) {}   // show what the gauge really has
+    render();
+    return false;
+  }
+}
+
+const fmt = n => Number(n).toLocaleString('en-US');
+
+function render() {
+  if (!S) return;
+  document.querySelectorAll('.seg').forEach(seg => {
+    const v = S[seg.dataset.key] ? '1' : '0';
+    seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  });
+  $('shiftOn').checked = S.shiftOn;
+  $('serialOn').checked = S.serialOn;
+  $('shiftBody').classList.toggle('dim', !S.shiftOn);
+  const y = $('yellowRpm'), r = $('redRpm');
+  y.min = S.rpmMin; y.max = S.rpmMax - S.rpmGap; y.value = S.yellowRpm;
+  r.min = S.rpmMin + S.rpmGap; r.max = S.rpmMax; r.value = S.redRpm;
+  $('yellowOut').textContent = fmt(S.yellowRpm);
+  $('redOut').textContent = fmt(S.redRpm);
+  $('oilNow').textContent = fmt(S.oilMiles);
+  if (document.activeElement !== $('oilInterval')) $('oilInterval').value = S.oilIntervalMiles;
+  const focused = document.activeElement ? document.activeElement.id : '';
+  if (!['source', 'elmSsid', 'elmPass'].includes(focused)) {
+    $('source').value = S.useElmWifi ? '1' : '0';
+    $('elmSsid').value = S.elmSsid; $('elmPass').value = S.elmPass;
+  }
+  $('elmFields').hidden = $('source').value !== '1';
+}
+
+// segmented controls: tap = save
+document.querySelectorAll('.seg').forEach(seg => {
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    save('/api/settings', { [seg.dataset.key]: b.dataset.v });
+  });
+});
+
+$('shiftOn').addEventListener('change', e => save('/api/settings', { shiftOn: e.target.checked ? '1' : '0' }));
+$('serialOn').addEventListener('change', e => save('/api/settings', { serialOn: e.target.checked ? '1' : '0' }));
+
+// RPM sliders: yellow always stays at least rpmGap below red
+$('yellowRpm').addEventListener('input', e => {
+  const max = +$('redRpm').value - S.rpmGap;
+  if (+e.target.value > max) e.target.value = max;
+  $('yellowOut').textContent = fmt(e.target.value);
+});
+$('redRpm').addEventListener('input', e => {
+  const min = +$('yellowRpm').value + S.rpmGap;
+  if (+e.target.value < min) e.target.value = min;
+  $('redOut').textContent = fmt(e.target.value);
+});
+$('yellowRpm').addEventListener('change', e => save('/api/settings', { yellowRpm: e.target.value }));
+$('redRpm').addEventListener('change', e => save('/api/settings', { redRpm: e.target.value }));
+
+$('oilIntervalSave').onclick = () => save('/api/settings', { oilIntervalMiles: $('oilInterval').value });
+$('oilSetBtn').onclick = async () => {
+  const v = $('oilSet').value.trim();
+  if (v === '') return toast('Type the miles first', true);
+  if (await save('/api/oil/set', { miles: v }, 'Oil miles set')) $('oilSet').value = '';
+};
+$('oilReset').onclick = async () => {
+  if (await ask('Reset oil miles to 0? Do this after an oil change.')) save('/api/oil/reset', {}, 'Oil miles reset');
+};
+
+$('source').addEventListener('change', () => { $('elmFields').hidden = $('source').value !== '1'; });
+$('sourceSave').onclick = async () => {
+  const useElm = $('source').value;
+  const switching = (useElm === '1') !== S.useElmWifi;
+  if (switching && !(await ask('The gauge will restart to switch the data source. Continue?'))) return;
+  const ok = await save('/api/settings', { useElmWifi: useElm, elmSsid: $('elmSsid').value, elmPass: $('elmPass').value },
+                        switching ? 'Saved - restarting gauge' : 'Saved');
+  if (ok && document.activeElement) document.activeElement.blur();
+};
+$('defaults').onclick = async () => {
+  if (await ask('Reset all settings to defaults? Oil miles are kept.')) save('/api/defaults', {}, 'Defaults restored');
+};
+
+// live values, once a second
+const show = (id, v) => { $(id).textContent = v === null || v === undefined ? '--' : v; };
+async function poll() {
+  if (connected()) {
+    try {
+      const st = await api('/api/status');
+      $('offline').hidden = true;
+      const link = $('link');
+      link.textContent = st.link + ' · ' + st.source;
+      link.className = 'pill ' + (st.link === 'ECU LIVE' ? 'ok' : 'bad');
+      show('vBoost', st.boost); show('vRpm', st.rpm === null ? null : fmt(st.rpm)); show('vAfr', st.afr);
+      show('vCoolant', st.coolant); show('vIat', st.iat); show('vOil', fmt(st.oilMiles));
+      $('fw').textContent = 'v' + st.fw;
+      if (S && st.oilMiles !== S.oilMiles) { S.oilMiles = st.oilMiles; $('oilNow').textContent = fmt(st.oilMiles); }
+      if (!S) { S = await api('/api/settings'); render(); }
+    } catch (e) {
+      $('offline').textContent = MODE === 'usb'
+        ? 'The gauge is not answering over USB. Unplug and replug it, then click Connect.'
+        : 'The gauge is not answering over Bluetooth. Move closer, or tap Connect again.';
+      $('offline').hidden = false;
+    }
+  } else {
+    $('offline').textContent = MODE === 'usb'
+      ? 'Plug the gauge into this computer by USB, then click Connect.'
+      : 'Turn the gauge on, stay close to it, then tap Connect and pick WRX-Gauge.';
+    $('offline').hidden = false;
+  }
+  setTimeout(poll, MODE === 'ble' ? 1500 : 1000);   // Bluetooth is slower - ask a bit less often
+}
+
+if (MODE === 'usb') {
+  $('linkBar').hidden = false;
+  $('linkConnect').onclick = usbConnect;
+  if ('serial' in navigator) {
+    // reconnect by itself to a gauge this browser was allowed to use before
+    // (also after the gauge restarts)
+    const tryAuto = async () => {
+      if (linkWrite) return;
+      const ports = await navigator.serial.getPorts();
+      if (ports.length === 1) usbOpen(ports[0]).catch(() => {});
+    };
+    navigator.serial.addEventListener('connect', tryAuto);
+    tryAuto();
+  } else {
+    $('linkState').textContent = 'needs Chrome or Edge';
+  }
+} else if (MODE === 'ble') {
+  $('linkBar').hidden = false;
+  $('linkName').textContent = 'Bluetooth';
+  $('linkConnect').onclick = bleConnect;      // must be a tap - phones only allow Bluetooth pairing from one
+  if (!navigator.bluetooth) $('linkState').textContent = 'open this page in the Bluefy app';
+}
+poll();
+</script>
+</body>
+</html>
