@@ -56,8 +56,9 @@
 
   .slider-head { display: flex; justify-content: space-between; align-items: baseline; }
   .rpm { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .rpm.y { color: var(--yellow); } .rpm.r { color: var(--red); }
+  .rpm.g { color: var(--green); } .rpm.y { color: var(--yellow); } .rpm.r { color: var(--red); }
   input[type=range] { width: 100%; margin: 12px 0 4px; accent-color: var(--red); height: 28px; }
+  input[type=range].g { accent-color: var(--green); }
   input[type=range].y { accent-color: var(--yellow); }
 
   input[type=text], input[type=password], input[type=number], select {
@@ -142,18 +143,25 @@
       <label class="switch"><input type="checkbox" id="shiftOn"><span></span></label></div>
     <div id="shiftBody">
       <div class="row col">
-        <div class="slider-head"><span>Yellow at</span><span class="rpm y" id="yellowOut">--</span></div>
-        <input type="range" class="y" id="yellowRpm" step="100">
+        <span class="hint">Below green it breathes green, which means the gauge is getting live data. Gray means no data.</span>
       </div>
-      <div class="row"><span class="label">Yellow style</span>
-        <div class="seg" data-key="yellowFlash"><button data-v="0">Solid</button><button data-v="1">Flashing</button></div></div>
       <div class="row col">
-        <div class="slider-head"><span>Red at</span><span class="rpm r" id="redOut">--</span></div>
-        <input type="range" id="redRpm" step="100">
-        <span class="hint">Redline is 6,700. Yellow always stays below red.</span>
+        <div class="slider-head"><span>Green above</span><span class="rpm g" id="greenOut">--</span></div>
+        <input type="range" class="g" id="greenRpm" step="10">
       </div>
-      <div class="row"><span class="label">Red style</span>
-        <div class="seg" data-key="redFlash"><button data-v="0">Solid</button><button data-v="1">Flashing</button></div></div>
+      <div class="row col">
+        <div class="slider-head"><span>Yellow above</span><span class="rpm y" id="yellowOut">--</span></div>
+        <input type="range" class="y" id="yellowRpm" step="10">
+      </div>
+      <div class="row col">
+        <div class="slider-head"><span>Red above</span><span class="rpm r" id="redOut">--</span></div>
+        <input type="range" id="redRpm" step="10">
+      </div>
+      <div class="row col">
+        <div class="slider-head"><span>Flashing red above</span><span class="rpm r" id="flashOut">--</span></div>
+        <input type="range" id="flashRpm" step="10">
+        <span class="hint">Redline is 6,700. Each color stays at least 100 RPM above the one before.</span>
+      </div>
     </div>
   </div>
 
@@ -214,6 +222,7 @@ let S = null;
 //  'ble' - opened from a web address, e.g. in Bluefy on iPhone: Bluetooth
 // Both send one-line requests and wait for a "@@ok"/"@@err" line.
 const MODE = location.protocol === 'file:' ? 'usb' : 'ble';
+const SHIFT = ['green', 'yellow', 'red', 'flash'];   // shift light stages, low to high
 let linkWrite = null;                 // sends text to the gauge; null = not connected
 let pending = null, queue = Promise.resolve(), lineBuf = '';
 const decoder = new TextDecoder();
@@ -377,11 +386,13 @@ function render() {
   $('screenDebugOn').checked = S.screenDebugOn;
   $('canMaxSpeed').checked = S.canMaxSpeed;
   $('shiftBody').classList.toggle('dim', !S.shiftOn);
-  const y = $('yellowRpm'), r = $('redRpm');
-  y.min = S.rpmMin; y.max = S.rpmMax - S.rpmGap; y.value = S.yellowRpm;
-  r.min = S.rpmMin + S.rpmGap; r.max = S.rpmMax; r.value = S.redRpm;
-  $('yellowOut').textContent = fmt(S.yellowRpm);
-  $('redOut').textContent = fmt(S.redRpm);
+  SHIFT.forEach((k, i) => {
+    const el = $(k + 'Rpm');
+    el.min = S.rpmMin + i * S.rpmGap;
+    el.max = S.rpmMax - (SHIFT.length - 1 - i) * S.rpmGap;
+    if (document.activeElement !== el) el.value = S[k + 'Rpm'];
+    $(k + 'Out').textContent = fmt(el.value);
+  });
   $('oilNow').textContent = fmt(S.oilMiles);
   if (document.activeElement !== $('oilInterval')) $('oilInterval').value = S.oilIntervalMiles;
   const focused = document.activeElement ? document.activeElement.id : '';
@@ -405,19 +416,16 @@ $('serialOn').addEventListener('change', e => save('/api/settings', { serialOn: 
 $('screenDebugOn').addEventListener('change', e => save('/api/settings', { screenDebugOn: e.target.checked ? '1' : '0' }));
 $('canMaxSpeed').addEventListener('change', e => save('/api/settings', { canMaxSpeed: e.target.checked ? '1' : '0' }));
 
-// RPM sliders: yellow always stays at least rpmGap below red
-$('yellowRpm').addEventListener('input', e => {
-  const max = +$('redRpm').value - S.rpmGap;
-  if (+e.target.value > max) e.target.value = max;
-  $('yellowOut').textContent = fmt(e.target.value);
+// RPM sliders: each color stays at least rpmGap above the one before it
+SHIFT.forEach((k, i) => {
+  const el = $(k + 'Rpm');
+  el.addEventListener('input', () => {
+    if (i > 0) el.value = Math.max(+el.value, +$(SHIFT[i - 1] + 'Rpm').value + S.rpmGap);
+    if (i < SHIFT.length - 1) el.value = Math.min(+el.value, +$(SHIFT[i + 1] + 'Rpm').value - S.rpmGap);
+    $(k + 'Out').textContent = fmt(el.value);
+  });
+  el.addEventListener('change', () => save('/api/settings', { [k + 'Rpm']: el.value }));
 });
-$('redRpm').addEventListener('input', e => {
-  const min = +$('yellowRpm').value + S.rpmGap;
-  if (+e.target.value < min) e.target.value = min;
-  $('redOut').textContent = fmt(e.target.value);
-});
-$('yellowRpm').addEventListener('change', e => save('/api/settings', { yellowRpm: e.target.value }));
-$('redRpm').addEventListener('change', e => save('/api/settings', { redRpm: e.target.value }));
 
 $('oilIntervalSave').onclick = () => save('/api/settings', { oilIntervalMiles: $('oilInterval').value });
 $('oilSetBtn').onclick = async () => {
